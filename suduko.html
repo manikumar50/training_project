@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <h1>home<a href="index.html">click here</a>.</h1>
+  <title>Sudoku Game</title>
+  <style>
+    body {
+      background-color: #f0f0f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 28px;
+      margin-bottom: 20px;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      grid-template-rows: repeat(9, 1fr);
+      gap: 1px;
+      border: 1px solid #000;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+      width: 360px;
+      height: 360px;
+      margin-bottom: 20px;
+    }
+
+    .cell {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 20px;
+      background-color: #fff;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .cell:hover {
+      background-color: #f0f0f0;
+    }
+
+    .cell.bold {
+      font-weight: bold;
+    }
+
+    .cell.invalid {
+      color: #f44336;
+    }
+
+    .cell.initial {
+      background-color: #f0f0f0;
+      font-weight: bold;
+      color: #000;
+      cursor: not-allowed;
+    }
+
+    .cell.selected {
+      background-color: #cce6ff;
+    }
+
+    .cell input {
+      width: 100%;
+      height: 100%;
+      font-size: 20px;
+      text-align: center;
+      border: none;
+      background-color: transparent;
+      cursor: pointer;
+    }
+
+    #button-container {
+      display: flex;
+      justify-content: center;
+    }
+
+    #undoButton,
+    #redoButton {
+      margin: 0 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      background-color: #4caf50;
+      color: #fff;
+      transition: background-color 0.3s ease;
+    }
+
+    #undoButton:disabled,
+    #redoButton:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    #undoButton:hover,
+    #redoButton:hover {
+      background-color: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sudoku Game</h1>
+  <div class="board"></div>
+  <div id="button-container">
+    <button id="undoButton" disabled>Undo</button>
+    <button id="redoButton" disabled>Redo</button>
+  </div>
+
+  <script>
+    // Open IndexedDB
+    const request = indexedDB.open("sudokuDB", 1);
+    let db;
+    let gameHistory = [];
+    let currentMoveIndex = -1;
+
+    request.onerror = function(event) {
+      console.error("Error opening indexedDB", event.target.error);
+    };
+
+    request.onsuccess = function(event) {
+      db = event.target.result;
+      console.log("IndexedDB successfully opened");
+      initializeGame();
+    };
+
+    request.onupgradeneeded = function(event) {
+      db = event.target.result;
+
+      // Create an object store to store game data
+      const objectStore = db.createObjectStore("games", { keyPath: "id", autoIncrement: true });
+
+      // Define the object store's data structure
+      objectStore.createIndex("timestamp", "timestamp", { unique: false });
+
+      console.log("IndexedDB upgrade complete");
+    };
+
+ 
+function validateBoard() {
+      let isValid = true;
+
+      for (let i = 0; i < 81; i++) {
+        const row = Math.floor(i / 9);
+        const col = i % 9;
+        const cell = cells[i];
+        const input = cell.querySelector("input");
+        const value = gameBoard[row][col];
+
+        // Reset cell styles
+        cell.classList.remove("invalid");
+        input.classList.remove("invalid");
+
+        // Skip empty cells
+        if (value === "") continue;
+
+        // Check row
+        for (let j = 0; j < 9; j++) {
+          if (j !== col && gameBoard[row][j] === value) {
+            cell.classList.add("invalid");
+            input.classList.add("invalid");
+            isValid = false;
+            break;
+          }
+        }
+
+        // Check column
+        if (!isValid) continue;
+
+        for (let j = 0; j < 9; j++) {
+          if (j !== row && gameBoard[j][col] === value) {
+            cell.classList.add("invalid");
+            input.classList.add("invalid");
+            isValid = false;
+            break;
+          }
+        }
+
+        // Check 3x3 box
+        if (!isValid) continue;
+
+        const boxRow = Math.floor(row / 3) * 3;
+        const boxCol = Math.floor(col / 3) * 3;
+        for (let j = boxRow; j < boxRow + 3; j++) {
+          for (let k = boxCol; k < boxCol + 3; k++) {
+            if (j !== row && k !== col && gameBoard[j][k] === value) {
+              cell.classList.add("invalid");
+              input.classList.add("invalid");
+              isValid = false;
+              break;
+            }
+          }
+          if (!isValid) break;
+        }
+      }
+
+      if (!isValid) {
+        alert("Invalid move! Please check your input.");
+      }
+    }
+
+
+function cellInputHandler(event) {
+  if (gameFinished) return;
+
+  const row = parseInt(event.target.parentElement.dataset.row);
+  const col = parseInt(event.target.parentElement.dataset.col);
+  const value = event.target.value;
+
+  const prevState = {
+    gameBoard: JSON.parse(JSON.stringify(gameBoard)),
+    gameFinished
+  };
+  gameHistory = gameHistory.slice(0, currentMoveIndex + 1);
+  gameHistory.push(prevState);
+  currentMoveIndex++;
+
+  gameBoard[row][col] = value;
+
+  validateBoard();
+  updateBoard();
+  updateButtons();
+  saveGame();
+}
+
+    
+    function initializeGame() {
+      const board = document.querySelector(".board");
+      const cells = [];
+      let gameBoard = [
+        [5, 3, "", "", 7, "", "", "", ""],
+        [6, "", "", 1, 9, 5, "", "", ""],
+        ["", 9, 8, "", "", "", "", 6, ""],
+        [8, "", "", "", 6, "", "", "", 3],
+        [4, "", "", 8, "", 3, "", "", 1],
+        [7, "", "", "", 2, "", "", "", 6],
+        ["", 6, "", "", "", "", 2, 8, ""],
+        ["", "", "", 4, 1, 9, "", "", 5],
+        ["", "", "", "", 8, "", "", 7, 9]
+      ];
+      let gameFinished = false;
+      let selectedCell = null;
+
+      // Create cells
+      for (let i = 0; i < 81; i++) {
+        const cell = document.createElement("div");
+        cell.classList.add("cell");
+        cell.dataset.row = Math.floor(i / 9);
+        cell.dataset.col = i % 9;
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.maxLength = 1;
+        input.addEventListener("input", cellInputHandler);
+        cell.appendChild(input);
+
+        board.appendChild(cell);
+        cells.push(cell);
+      }
+
+      const undoButton = document.getElementById("undoButton");
+      const redoButton = document.getElementById("redoButton");
+
+      undoButton.addEventListener("click", undoMove);
+      redoButton.addEventListener("click", redoMove);
+
+      function cellInputHandler(event) {
+        if (gameFinished) return;
+
+        const row = parseInt(event.target.parentElement.dataset.row);
+        const col = parseInt(event.target.parentElement.dataset.col);
+        const value = parseInt(event.target.value);
+
+        const prevState = {
+          gameBoard: JSON.parse(JSON.stringify(gameBoard)),
+          gameFinished
+        };
+        gameHistory = gameHistory.slice(0, currentMoveIndex + 1);
+        gameHistory.push(prevState);
+        currentMoveIndex++;
+
+        gameBoard[row][col] = isNaN(value) ? "" : value;
+
+        validateBoard();
+        updateBoard();
+        updateButtons();
+        saveGame();
+      }
+
+      function saveGame() {
+        const transaction = db.transaction(["games"], "readwrite");
+        const objectStore = transaction.objectStore("games");
+        const game = {
+          board: gameBoard,
+          timestamp: new Date().getTime()
+        };
+
+        const request = objectStore.add(game);
+
+        request.onsuccess = function(event) {
+          console.log("Game saved to IndexedDB");
+        };
+
+        request.onerror = function(event) {
+          console.error("Error saving game to IndexedDB", event.target.error);
+        };
+      }
+
+      function updateBoard() {
+        for (let i = 0; i < 81; i++) {
+          const row = Math.floor(i / 9);
+          const col = i % 9;
+          const cell = cells[i];
+          const input = cell.querySelector("input");
+          const value = gameBoard[row][col];
+
+          input.value = value;
+          cell.classList.toggle("initial", value !== "");
+        }
+      }
+
+      function updateButtons() {
+        undoButton.disabled = currentMoveIndex === -1;
+        redoButton.disabled = currentMoveIndex === gameHistory.length - 1;
+      }
+
+      function undoMove() {
+        if (currentMoveIndex >= 0) {
+          const prevState = gameHistory[currentMoveIndex];
+          gameBoard = JSON.parse(JSON.stringify(prevState.gameBoard));
+          gameFinished = prevState.gameFinished;
+
+          updateBoard();
+
+          currentMoveIndex--;
+          updateButtons();
+        }
+      }
+
+      function redoMove() {
+        if (currentMoveIndex < gameHistory.length - 1) {
+          currentMoveIndex++;
+          const nextState = gameHistory[currentMoveIndex];
+          gameBoard = JSON.parse(JSON.stringify(nextState.gameBoard));
+          gameFinished = nextState.gameFinished;
+
+          updateBoard();
+
+          updateButtons();
+        }
+      }
+
+      function validateBoard() {
+        for (let i = 0; i < 81; i++) {
+          const row = Math.floor(i / 9);
+          const col = i % 9;
+          const cell = cells[i];
+          const input = cell.querySelector("input");
+          const value = gameBoard[row][col];
+
+          // Reset cell styles
+          cell.classList.remove("invalid");
+          input.classList.remove("invalid");
+
+          // Skip empty cells
+          if (value === "") continue;
+
+          // Check row
+          for (let j = 0; j < 9; j++) {
+            if (j !== col && gameBoard[row][j] === value) {
+              cell.classList.add("invalid");
+              input.classList.add("invalid");
+              break;
+            }
+          }
+
+          // Check column
+          for (let j = 0; j < 9; j++) {
+            if (j !== row && gameBoard[j][col] === value) {
+              cell.classList.add("invalid");
+              input.classList.add("invalid");
+              break;
+            }
+          }
+
+          // Check 3x3 box
+          const boxRow = Math.floor(row / 3) * 3;
+          const boxCol = Math.floor(col / 3) * 3;
+          for (let j = boxRow; j < boxRow + 3; j++) {
+            for (let k = boxCol; k < boxCol + 3; k++) {
+              if (j !== row && k !== col && gameBoard[j][k] === value) {
+                cell.classList.add("invalid");
+                input.classList.add("invalid");
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      function selectCell(cell) {
+        if (gameFinished) return;
+
+        if (selectedCell) {
+          selectedCell.classList.remove("selected");
+        }
+
+        selectedCell = cell;
+        selectedCell.classList.add("selected");
+      }
+
+      board.addEventListener("click", function(event) {
+        if (event.target.classList.contains("cell")) {
+          selectCell(event.target);
+        }
+      });
+
+      // Initialize board
+      updateBoard();
+      updateButtons();
+    }
+  </script>
+</body>
+</html>

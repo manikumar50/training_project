@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>GST Calculator</title>
+	<link rel="stylesheet" href="w3.css">
+
+</head>
+<body>
+<div class="w3-top">
+	<div class="w3-bar w3-black">
+		<a href="index.html" class="w3-bar-item w3-button w3-mobile w3-green">Back</a>
+	</div>
+</div>
+
+<br><br>
+	
+  <h1>GST Calculator</h1> 
+  <label for="minAmount">Minimum Amount:</label>
+  <input type="text" id="minAmount" />  
+  <label for="maxAmount">Maximum Amount:</label>
+  <input type="text" id="maxAmount" />  
+  <label for="gstPercentage">GST Percentage:</label>
+  <select id="gstPercentage">
+    <option value="6">6%</option>
+    <option value="12">12%</option>
+    <option value="18">18%</option>
+    <option value="28">28%</option>
+  </select>
+  <button onclick="calculateGST()">Calculate GST</button>
+  <div id="wholeNumbersResult"></div>
+  
+  <script>
+    // Open IndexedDB database
+    var request = indexedDB.open("GSTCalculatorDB", 1);
+    var db;
+
+    request.onerror = function(event) {
+      console.log("IndexedDB error: " + event.target.errorCode);
+    };
+
+    request.onupgradeneeded = function(event) {
+      db = event.target.result;
+      var objectStore = db.createObjectStore("calculatorData", { keyPath: "id", autoIncrement: true });
+      objectStore.createIndex("amount", "amount", { unique: false });
+      objectStore.createIndex("gstPercentage", "gstPercentage", { unique: false });
+    };
+
+    request.onsuccess = function(event) {
+      db = event.target.result;
+      console.log("IndexedDB opened successfully.");
+    };
+
+    function calculateGST() {
+      var minAmount = parseFloat(document.getElementById("minAmount").value);
+      var maxAmount = parseFloat(document.getElementById("maxAmount").value);
+      var gstPercentage = parseFloat(document.getElementById("gstPercentage").value);
+
+      if (isNaN(minAmount) || isNaN(maxAmount) || isNaN(gstPercentage)) {
+        console.log("Invalid input. Please enter numeric values.");
+        return;
+      }
+
+      // Create an array to store whole numbers between min and max GST values
+      var wholeNumbers = [];
+
+      for (var amount = minAmount; amount <= maxAmount; amount++) {
+        var gstAmount = (amount * gstPercentage/2) / 100;
+        if (Number.isInteger(gstAmount)) {
+          wholeNumbers.push(amount);
+        }
+      }
+
+      // Store data in IndexedDB
+      var transaction = db.transaction(["calculatorData"], "readwrite");
+      var objectStore = transaction.objectStore("calculatorData");
+
+      objectStore.add({ minAmount: minAmount, maxAmount: maxAmount, gstPercentage: gstPercentage }).onsuccess = function(event) {
+        console.log("Data stored in IndexedDB with id: " + event.target.result);
+      };
+
+      var resultDiv = document.getElementById("wholeNumbersResult");
+      resultDiv.innerHTML = "Whole numbers between min and max GST values: " + wholeNumbers.join(", ");
+    }
+  </script>
+</body>
+</html>
