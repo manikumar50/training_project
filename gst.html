@@ -2,23 +2,103 @@
 <html>
 <head>
   <title>GST Calculator</title>
-	<link rel="stylesheet" href="w3.css">
-
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f2f2f2;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #ffffff;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    input[type="text"],
+    select {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      background-color: #4CAF50;
+      color: #fff;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .delete-button {
+      background-color: #f44336;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .menu-bar {
+      background-color: #333;
+      color: white;
+      padding: 10px 0;
+    }
+    .menu-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .menu-button {
+      background-color: #4CAF50;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      padding: 8px 16px;
+      text-decoration: none;
+      margin-right: 10px;
+    }
+    .menu-button:hover {
+      background-color: #45a049;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+  </style>
 </head>
 <body>
-<div class="w3-top">
-	<div class="w3-bar w3-black">
-		<a href="index.html" class="w3-bar-item w3-button w3-mobile w3-green">Back</a>
-	</div>
-</div>
-
-<br><br>
-	
-  <h1>GST Calculator</h1> 
-  <label for="minAmount">Minimum Amount:</label>
-  <input type="text" id="minAmount" />  
-  <label for="maxAmount">Maximum Amount:</label>
-  <input type="text" id="maxAmount" />  
+  <div class="menu-bar">
+    <div class="menu-container">
+      <a class="menu-button" href="index.html">Back</a>
+    </div>
+  </div>
+<div class="container">
+  <h1>GST Calculator</h1>
+  <label for="amount">Amount:</label>
+  <input type="text" id="amount" />
   <label for="gstPercentage">GST Percentage:</label>
   <select id="gstPercentage">
     <option value="6">6%</option>
@@ -27,60 +107,108 @@
     <option value="28">28%</option>
   </select>
   <button onclick="calculateGST()">Calculate GST</button>
-  <div id="wholeNumbersResult"></div>
+  <div id="result"></div>
+  <h2>Calculated GST Data</h2>
+  <table id="dataTable">
+    <thead>
+      <tr>
+        <th>Amount</th>
+        <th>GST Percentage</th>
+        <th>GST Amount</th>
+        <th>Delete</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+  var db;
   
-  <script>
-    // Open IndexedDB database
-    var request = indexedDB.open("GSTCalculatorDB", 1);
-    var db;
+  // Open IndexedDB database
+  var request = indexedDB.open("GSTCalculatorDB", 1);
 
-    request.onerror = function(event) {
-      console.log("IndexedDB error: " + event.target.errorCode);
-    };
+  request.onerror = function(event) {
+    console.log("IndexedDB error: " + event.target.errorCode);
+  };
 
-    request.onupgradeneeded = function(event) {
-      db = event.target.result;
-      var objectStore = db.createObjectStore("calculatorData", { keyPath: "id", autoIncrement: true });
-      objectStore.createIndex("amount", "amount", { unique: false });
-      objectStore.createIndex("gstPercentage", "gstPercentage", { unique: false });
-    };
+  request.onupgradeneeded = function(event) {
+    db = event.target.result;
+    var objectStore = db.createObjectStore("calculatorData", { keyPath: "id", autoIncrement: true });
+    objectStore.createIndex("amount", "amount", { unique: false });
+    objectStore.createIndex("gstPercentage", "gstPercentage", { unique: false });
+    objectStore.createIndex("gstAmount", "gstAmount", { unique: false });
+  };
 
-    request.onsuccess = function(event) {
-      db = event.target.result;
-      console.log("IndexedDB opened successfully.");
-    };
+  request.onsuccess = function(event) {
+    db = event.target.result;
+    console.log("IndexedDB opened successfully.");
+    displayData();
+  };
 
-    function calculateGST() {
-      var minAmount = parseFloat(document.getElementById("minAmount").value);
-      var maxAmount = parseFloat(document.getElementById("maxAmount").value);
-      var gstPercentage = parseFloat(document.getElementById("gstPercentage").value);
+  function calculateGST() {
+    var amount = parseFloat(document.getElementById("amount").value);
+    var gstPercentage = parseFloat(document.getElementById("gstPercentage").value);
 
-      if (isNaN(minAmount) || isNaN(maxAmount) || isNaN(gstPercentage)) {
-        console.log("Invalid input. Please enter numeric values.");
-        return;
-      }
-
-      // Create an array to store whole numbers between min and max GST values
-      var wholeNumbers = [];
-
-      for (var amount = minAmount; amount <= maxAmount; amount++) {
-        var gstAmount = (amount * gstPercentage/2) / 100;
-        if (Number.isInteger(gstAmount)) {
-          wholeNumbers.push(amount);
-        }
-      }
-
-      // Store data in IndexedDB
-      var transaction = db.transaction(["calculatorData"], "readwrite");
-      var objectStore = transaction.objectStore("calculatorData");
-
-      objectStore.add({ minAmount: minAmount, maxAmount: maxAmount, gstPercentage: gstPercentage }).onsuccess = function(event) {
-        console.log("Data stored in IndexedDB with id: " + event.target.result);
-      };
-
-      var resultDiv = document.getElementById("wholeNumbersResult");
-      resultDiv.innerHTML = "Whole numbers between min and max GST values: " + wholeNumbers.join(", ");
+    if (isNaN(amount) || isNaN(gstPercentage)) {
+      console.log("Invalid input. Please enter numeric values.");
+      return;
     }
-  </script>
+
+    var gstAmount = (amount * gstPercentage) / 100;
+
+    // Store data in IndexedDB
+    var transaction = db.transaction(["calculatorData"], "readwrite");
+    var objectStore = transaction.objectStore("calculatorData");
+
+    objectStore.add({ amount: amount, gstPercentage: gstPercentage, gstAmount: gstAmount }).onsuccess = function(event) {
+      console.log("Data stored in IndexedDB with id: " + event.target.result);
+      displayData();
+    };
+  }
+
+  function displayData() {
+    var table = document.getElementById("dataTable");
+    var tbody = table.getElementsByTagName("tbody")[0];
+    tbody.innerHTML = '';
+
+    var objectStore = db.transaction("calculatorData").objectStore("calculatorData");
+
+    objectStore.openCursor().onsuccess = function(event) {
+      var cursor = event.target.result;
+      if (cursor) {
+        var row = tbody.insertRow();
+        var amountCell = row.insertCell(0);
+        var gstPercentageCell = row.insertCell(1);
+        var gstAmountCell = row.insertCell(2);
+        var deleteCell = row.insertCell(3);
+
+        amountCell.textContent = cursor.value.amount;
+        gstPercentageCell.textContent = cursor.value.gstPercentage + "%";
+        gstAmountCell.textContent = cursor.value.gstAmount.toFixed(2);
+
+        var deleteButton = document.createElement("button");
+        deleteButton.textContent = "Delete";
+        deleteButton.className = "delete-button";
+        deleteButton.onclick = function() {
+          deleteData(cursor.key);
+        };
+        deleteCell.appendChild(deleteButton);
+
+        cursor.continue();
+      }
+    };
+  }
+
+  function deleteData(id) {
+    var transaction = db.transaction(["calculatorData"], "readwrite");
+    var objectStore = transaction.objectStore("calculatorData");
+    
+    objectStore.delete(id).onsuccess = function(event) {
+      console.log("Data with ID " + id + " deleted from IndexedDB.");
+      displayData();
+    };
+  }
+</script>
 </body>
 </html>
